@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+kafka-python
+neo4j
+requests
+python-multipart
+python-dotenv
+pydantic
+streamlit
+pandas 
+plotly
