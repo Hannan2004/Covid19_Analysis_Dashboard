@@ -4,23 +4,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
 
-# Import your modules (adjust paths as needed)
+# Import your modules - Updated paths for backend/ location
 try:
-    from .kafka_consumer import start_consumer_thread
-    from .neo4j_client import driver
-    from .models import CountryResponse, HealthCheck, ErrorResponse
-except ImportError:
+    from app.kafka_consumer import start_consumer_thread
+    from app.neo4j_client import driver
+    from app.models import CountryResponse, HealthCheck, ErrorResponse
+except ImportError as e:
+    print(f"Import error: {e}")
     # Fallback for direct execution
-    from kafka_consumer import start_consumer_thread
-    from neo4j_client import driver
-    from models import CountryResponse, HealthCheck, ErrorResponse
+    from app.kafka_consumer import start_consumer_thread
+    from app.neo4j_client import driver
+    from app.models import CountryResponse, HealthCheck, ErrorResponse
 
 app = FastAPI(title="COVID-19 Analytics API", version="1.0.0")
 
 # Add CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],  # Streamlit default port
+    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +51,6 @@ def health_check():
                 if test_result:
                     neo4j_status = "connected"
         
-        # Always return healthy for frontend to work
         response_data = {
             "status": "healthy",
             "message": "COVID-19 Analytics API is running",
@@ -67,21 +67,23 @@ def health_check():
         print(f"❌ Health check failed: {e}")
         return JSONResponse(
             content={
-                "status": "healthy",  # Still healthy to allow frontend
-                "message": "COVID-19 Analytics API is running",
+                "status": "error",
+                "message": f"Health check failed: {str(e)}",
                 "timestamp": datetime.now().isoformat(),
                 "services": {
                     "neo4j": "error",
                     "api": "running"  
                 }
             },
-            status_code=200
+            status_code=500
         )
 
-# ...existing endpoints remain the same...
 @app.get("/countries")
 def get_countries():
     try:
+        if not driver:
+            raise HTTPException(status_code=500, detail="Neo4j connection not available")
+            
         with driver.session() as session:
             result = session.run("MATCH (c:Country) RETURN c.name AS country, c.confirmed AS confirmed, c.deaths AS deaths, c.recovered AS recovered ORDER BY c.confirmed DESC")
             return [r.data() for r in result]
@@ -91,6 +93,9 @@ def get_countries():
 @app.get("/countries/{country_name}")
 def get_country(country_name: str):
     try:
+        if not driver:
+            raise HTTPException(status_code=500, detail="Neo4j connection not available")
+            
         with driver.session() as session:
             result = session.run(
                 "MATCH (c:Country {name: $name}) RETURN c.name AS country, c.confirmed AS confirmed, c.deaths AS deaths, c.recovered AS recovered, c.last_updated AS last_updated",
@@ -106,6 +111,9 @@ def get_country(country_name: str):
 @app.get("/stats/global")
 def get_global_stats():
     try:
+        if not driver:
+            raise HTTPException(status_code=500, detail="Neo4j connection not available")
+            
         with driver.session() as session:
             result = session.run(
                 "MATCH (c:Country) RETURN sum(c.confirmed) AS total_confirmed, sum(c.deaths) AS total_deaths, sum(c.recovered) AS total_recovered, count(c) AS total_countries"
@@ -124,6 +132,9 @@ def get_global_stats():
 @app.get("/stats/top/{limit}")
 def get_top_countries(limit: int = 10):
     try:
+        if not driver:
+            raise HTTPException(status_code=500, detail="Neo4j connection not available")
+            
         with driver.session() as session:
             result = session.run(
                 "MATCH (c:Country) RETURN c.name AS country, c.confirmed AS confirmed, c.deaths AS deaths, c.recovered AS recovered ORDER BY c.confirmed DESC LIMIT $limit",
