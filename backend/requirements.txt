@@ -9,3 +9,6 @@ pydantic
 streamlit
 pandas 
 plotly
+langchain
+langchain-community
+langchain-groq

@@ -50,7 +50,7 @@ docker-compose ps
 
 ### 3. Setup Python Environment
 ```bash
-cd dashboard
+cd backend
 
 # Create and activate virtual environment
 python -m venv venv
@@ -64,7 +64,7 @@ pip install -r requirements.txt
 ### 4. Run Services
 ### Terminal 1 - Data Producer:
 ```bash
-cd dashboard
+cd backend
 venv\Scripts\activate
 python app/producer.py
 ```
@@ -72,13 +72,12 @@ python app/producer.py
 ```bash
 cd dashboard
 venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Terminal 3 - Streamlit Dashboard
 ```bash
-cd dashboard
+cd backend
 cd app
 venv\Scripts\activate
 streamlit run app.py

@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from datetime import datetime
+import time
 import os
 
 # Import your modules - Updated paths for backend/ location
@@ -9,14 +11,55 @@ try:
     from app.kafka_consumer import start_consumer_thread
     from app.neo4j_client import driver
     from app.models import CountryResponse, HealthCheck, ErrorResponse
+    from app.trend_routes import router as trend_router
 except ImportError as e:
     print(f"Import error: {e}")
     # Fallback for direct execution
     from app.kafka_consumer import start_consumer_thread
     from app.neo4j_client import driver
     from app.models import CountryResponse, HealthCheck, ErrorResponse
+    from app.trend_routes import router as trend_router
 
-app = FastAPI(title="COVID-19 Analytics API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("Waiting for Neo4j to be ready...")
+    max_retries = 12
+    retry_count = 0
+
+    while retry_count < max_retries:
+        try:
+            if driver:
+                with driver.session() as session:
+                    result = session.run("RETURN 1 as test")
+                    test_result = result.single()
+                    if test_result:
+                        print("✅ Neo4j connection verified")
+                        break
+        except Exception as e:
+            print(f"🔄 Neo4j not ready yet (attempt {retry_count + 1}/{max_retries}): {e}")
+            time.sleep(10)
+            retry_count += 1
+    
+    if retry_count >= max_retries:
+        print("❌ Neo4j failed to start after 2 minutes.")
+        
+    try:
+        start_consumer_thread()
+        print("✅ Consumer thread started successfully")
+    except Exception as e:
+        print(f"❌ Failed to start consumer thread: {e}")
+    
+    yield
+    
+    # Shutdown
+    print("🛑 Application shutting down")
+
+app = FastAPI(
+    title="COVID-19 Analytics API", 
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Add CORS middleware for frontend
 app.add_middleware(
@@ -27,13 +70,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    try:
-        start_consumer_thread()
-        print("✅ Consumer thread started successfully")
-    except Exception as e:
-        print(f"❌ Failed to start consumer thread: {e}")
+app.include_router(trend_router)
 
 @app.get("/")
 def read_root():
